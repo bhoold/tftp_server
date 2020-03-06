@@ -15,11 +15,11 @@ https://github.com/gagle/node-tftp
 
 
 ## 包结构
-![data_packet.jpg](https://github.com/bhoold/winForm.chaoxing/raw/master/screenshots/data_packet.png)
+![data_packet.jpg](https://github.com/bhoold/tftp_server/raw/master/screenshots/data_packet.png)
 
 ## 工作流程
-![rrq_workflow.jpg](https://github.com/bhoold/winForm.chaoxing/raw/master/screenshots/rrq_workflow.png)
-![wrq_workflow.jpg](https://github.com/bhoold/winForm.chaoxing/raw/master/screenshots/wrq_workflow.png)
+![rrq_workflow.jpg](https://github.com/bhoold/tftp_server/raw/master/screenshots/rrq_workflow.png)
+![wrq_workflow.jpg](https://github.com/bhoold/tftp_server/raw/master/screenshots/wrq_workflow.png)
 
 
 ## 用法

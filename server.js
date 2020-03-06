@@ -40,13 +40,13 @@ const MMAIL = 3;
 
 
 // 错误代码
-const ERROR_NOTFOUND = 1;
-const ERROR_ACCESS = 2;
-const ERROR_DISKFULL = 3;
-const ERROR_UNKNOW = 4;
-const ERROR_ID = 5;
-const ERROR_FILEEXIST = 6;
-const ERROR_USER = 6;
+const ERROR_NOTFOUND = 1; //File not found. （文件未找到，服务器未找到下载请求中指定的文件）
+const ERROR_ACCESS = 2; //Access violation. （访问违规，程序对于服务器的默认路径没有写权限导致的）
+const ERROR_DISKFULL = 3; //Disk full or allocation exceeded. （磁盘已满或超出分配，上传文件时可能会出现这个错误）
+const ERROR_UNKNOW = 4; //Illegal TFTP operation. （非法的 TFTP 操作，服务器无法识别 TFTP 包中的操作码）
+const ERROR_ID = 5; //Unknown transfer ID. （未知的传输标识）
+const ERROR_FILEEXIST = 6; //File already exists. （文件已存在，要上传的文件已存在于服务器中）
+const ERROR_USER = 7; //No such user. （没有该用户）
 
 
 
@@ -64,19 +64,21 @@ class Server {
         }
 
         this.server = dgram.createSocket('udp4');
-        this.mode = '';
+        this.filename = ''; //文件名
+        this.mode = ''; //传输模式1ascii/2bin/3mail
         this.dataPacketNo = 0; //数据包编号
         this.data = ''; //要发送的数据
         this.errorNo = 0; //错误号
         this.errorMsg = '';
         this.fd = null; //文件句柄
+
     }
 
     run() {
         const server = this.server;
 
         server.on('error', (err) => {
-            console.log(`服务器异常：\n${err.stack}`);
+            console.log(`tftp服务出错：\n${err.stack}`);
             server.close();
         });
         server.on('message', (msg, rinfo) => {
@@ -124,8 +126,8 @@ class Server {
         switch(opcode){
             case RRQ:
                 console.log('get');
-                filename = Buffer.from(msgArr[0]).toString('ascii'); //tftp的文件名只能是ascii字符
-                mode = Buffer.from(msgArr[1]).toString('ascii'); //tftp的文件名只能是ascii字符
+                this.filename = filename = Buffer.from(msgArr[0]).toString('ascii'); //tftp的文件名只能是ascii字符
+                mode = Buffer.from(msgArr[1]).toString('ascii'); 
                 console.log(mode, filename);
                 switch(mode) {
                     case 'netascii':
@@ -138,8 +140,8 @@ class Server {
                             this.errorNo = ERROR_NOTFOUND;
                             this.errorMsg = err.message;
                             buf = this.makePack(ERROR);
+                            this.resetData();
                         }
-                        
                         break;
                     case 'octet':
                         this.mode = MOCTET;
@@ -148,7 +150,6 @@ class Server {
                             if(this.fd === null)
                                 this.fd = fs.openSync(this.documentRoot+filename);
                             let nbyte = fs.readSync(this.fd, readBuf, 0, DATASIZE);
-
                             if(nbyte < DATASIZE && this.fd) {
                                 fs.closeSync(this.fd);
                                 this.fd = null;
@@ -160,8 +161,8 @@ class Server {
                             this.errorNo = ERROR_NOTFOUND;
                             this.errorMsg = err.message;
                             buf = this.makePack(ERROR);
+                            this.resetData();
                         }
-                        
                         break;
                     case 'mail':
                         this.mode = MMAIL;
@@ -170,25 +171,51 @@ class Server {
                 break;
             case WRQ:
                 console.log('put');
-                filename = Buffer.from(msgArr[0]).toString('ascii'); //tftp的文件名只能是ascii字符
-                mode = Buffer.from(msgArr[1]).toString('ascii'); //tftp的文件名只能是ascii字符
+                this.filename = filename = Buffer.from(msgArr[0]).toString('ascii'); //tftp的文件名只能是ascii字符
+                mode = Buffer.from(msgArr[1]).toString('ascii'); 
                 console.log(mode, filename);
-                buf = this.makePack(ACK);
+                if(fs.existsSync(this.documentRoot+filename)) {
+                    this.errorNo = ERROR_FILEEXIST;
+                    this.errorMsg = 'File already exists.';
+                    buf = this.makePack(ERROR);
+                    this.resetData();
+                } else {
+                    switch(mode) {
+                        case 'netascii':
+                            this.mode = MASCII;
+                            break;
+                        case 'octet':
+                            this.mode = MOCTET;
+                            break;
+                        case 'mail':
+                            this.mode = MMAIL;
+                            break;
+                    }
+                    buf = this.makePack(ACK);
+                }
                 break;
             case DATA:
                 console.log('data');
                 console.log(msg);
                 packetNo = msg.readUInt16BE(0);
                 this.dataPacketNo = packetNo;
-                buf = this.makePack(ACK);
-                console.log(buf);
-                console.log('_________________')
+                try {
+                    msg = msg.slice(2); // 去掉前2个byte
+                    fs.appendFileSync(this.documentRoot+this.filename, msg);
+                    buf = this.makePack(ACK);
+                    if(msg.length < DATASIZE)
+                        this.resetData();
+                } catch (err) {
+                    this.errorNo = ERROR_DISKFULL;
+                    this.errorMsg = 'error write file.';
+                    buf = this.makePack(ERROR);
+                    this.resetData();
+                }
                 break;
             case ACK:
-                //console.log('ack');
+                console.log('ack');
                 packetNo = msg.readUInt16BE(0);
                 this.dataPacketNo = packetNo + 1;
-
                 if(this.mode == MOCTET) {
                     let readBuf = Buffer.alloc(DATASIZE);
                     let nbyte = 0;
@@ -198,26 +225,19 @@ class Server {
                     } else {
                         this.data = '';
                     }
-
-                    if(nbyte < DATASIZE && this.fd) {
-                        fs.closeSync(this.fd);
-                        this.fd = null;
+                    if(nbyte < DATASIZE) { //结束传输
+                        this.resetData();
                     }
                 }
-
                 buf = this.makePack(DATA);
                 break;
             case ERROR:
                 console.log(`客户端报错: ${String.fromCharCode(...msg.slice(2))}`);
-                if(this.fd) {
-                    fs.closeSync(this.fd);
-                    this.fd = null;
-                }
-
+                this.resetData();
                 break;
-                        
         }
         if(buf !== undefined) {
+            console.log(buf)
             server.send(buf, rinfo.port, rinfo.address);
         }
 
@@ -291,6 +311,18 @@ class Server {
         return buf;
     }
 
+    resetData() {
+        this.filename = '';
+        this.mode = '';
+        this.dataPacketNo = 0;
+        this.data = '';
+        this.errorNo = 0;
+        this.errorMsg = '';
+        if(this.fd) {
+            fs.closeSync(this.fd);
+            this.fd = null;
+        }
+    }
 }
 
 module.exports = Server

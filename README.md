@@ -1,6 +1,11 @@
 # tftp_server
 使用nodejs开发的tftp协议程序
 
+## 协议文档
+RFC_index https://www.rfc-editor.org/rfc-index2.html 
+RFC1350 https://tools.ietf.org/html/rfc1350 
+
+
 ## 参考网站
 https://blog.csdn.net/lisayh/article/details/95045663 
 http://blog.sina.com.cn/s/blog_4b0bee65010007d3.html 

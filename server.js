@@ -40,6 +40,7 @@ const MMAIL = 3;
 
 
 // 错误代码
+const ERROR_UNDEFINED = 0; //Not defined, see error message. （未定义的错误，需要查看错误信息）
 const ERROR_NOTFOUND = 1; //File not found. （文件未找到，服务器未找到下载请求中指定的文件）
 const ERROR_ACCESS = 2; //Access violation. （访问违规，程序对于服务器的默认路径没有写权限导致的）
 const ERROR_DISKFULL = 3; //Disk full or allocation exceeded. （磁盘已满或超出分配，上传文件时可能会出现这个错误）
@@ -68,7 +69,7 @@ class Server {
         this.mode = ''; //传输模式1ascii/2bin/3mail
         this.dataPacketNo = 0; //数据包编号
         this.data = ''; //要发送的数据
-        this.errorNo = 0; //错误号
+        this.errorNo = ERROR_UNDEFINED; //错误号
         this.errorMsg = '';
         this.fd = null; //文件句柄
 
@@ -81,7 +82,7 @@ class Server {
             console.log(`tftp服务出错：\n${err.stack}`);
             server.close();
         });
-        server.on('message', (msg, rinfo) => {
+        server.on('message', (msg, rinfo) => {//console.log(msg.toString());console.log(msg);
             this.task(msg, rinfo); //todo: 启动子进程处理
         });
         server.on('listening', () => {
@@ -206,8 +207,8 @@ class Server {
                     if(msg.length < DATASIZE)
                         this.resetData();
                 } catch (err) {
-                    this.errorNo = ERROR_DISKFULL;
-                    this.errorMsg = 'error write file.';
+                    this.errorNo = ERROR_UNDEFINED;
+                    this.errorMsg = err.message;
                     buf = this.makePack(ERROR);
                     this.resetData();
                 }
@@ -299,7 +300,7 @@ class Server {
             case ACK:
                 cBuf = new Uint8Array([0,ACK]);
                 nBuf = new Uint16Array([this.dataPacketNo]);
-                buf = Buffer.concat([cBuf, new Uint8Array(nBuf.buffer, 1, 1), new Uint8Array(nBuf.buffer, 0, 1)]);
+                buf = Buffer.concat([cBuf, new Uint8Array(nBuf.buffer, 1, 1), new Uint8Array(nBuf.buffer, 0, 1)]); //Uint16Array转Uint8Array注意大小端排序
                 break;
             case ERROR:
                 cBuf = new Uint8Array([0,ERROR]);

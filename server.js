@@ -6,7 +6,7 @@ const path = require('path');
 const chalk = require('chalk');
 
 const TFTP_PORT = 69;
-const DOCUMENTROOT = process.cwd()+path.sep;
+const DOCUMENTROOT = process.cwd();
 
 /**
  * WRQ和DATA包由ACK或ERROR数据包确认，RRQ包由DATA或ERROR数据包确认
@@ -57,12 +57,15 @@ class Server {
         this.config = config;
         config.port = this.port = config.port ? config.port : TFTP_PORT;
 
-        config.documentRoot = this.documentRoot = config.documentRoot ? config.documentRoot : DOCUMENTROOT;
+        this.documentRoot = config.documentRoot ? config.documentRoot : DOCUMENTROOT;
         try {
             fs.accessSync(this.documentRoot, fs.constants.F_OK);
         } catch (err) {
-            config.documentRoot = this.documentRoot = DOCUMENTROOT;
+            this.documentRoot = DOCUMENTROOT;
         }
+        if(!this.documentRoot.match(/\\$/)) 
+            this.documentRoot += path.sep;
+        config.documentRoot = this.documentRoot;
 
         this.server = dgram.createSocket('udp4');
         this.filename = ''; //文件名
